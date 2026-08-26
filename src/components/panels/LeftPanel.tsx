@@ -19,7 +19,6 @@ interface Props {
   onJsonText: (v: string) => void;
   onLoadJson: () => void;
   onLoadFile: (file: File) => void;
-  onLoadDemo: () => void;
   trips: TripOption[];
   activeTripId: string | null;
   onSelectTrip: (trip: TripOption) => void;
@@ -127,12 +126,6 @@ export default function LeftPanel(p: Props) {
             }}
           />
         </div>
-        <button
-          onClick={p.onLoadDemo}
-          className="mt-2 w-full rounded-lg border border-[#39527e] bg-[#141d31] px-3 py-2 text-[12px] font-semibold text-sky-300 transition hover:bg-[#18243c]"
-        >
-          ▶ Load Demo — Jakarta → Bogor → Puncak → Bandung
-        </button>
         {p.parseMsg && (
           <div className="mt-2 rounded-lg border border-[#4a3a19] bg-[#241d0e] px-3 py-2 text-[11.5px] leading-snug text-amber-200/90">
             {p.parseMsg}

@@ -210,10 +210,14 @@ export class OverlayRenderer {
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(148,163,184,0.85)";
     ctx.font = `600 ${Math.round(30 * u * 1.2)}px ${FONT}`;
-    ctx.fillText("Load a journey to begin", W / 2, H / 2);
+    ctx.fillText("No journey loaded", W / 2, H / 2);
     ctx.font = `500 ${Math.round(19 * u * 1.2)}px ${FONT}`;
     ctx.fillStyle = "rgba(100,116,139,0.8)";
-    ctx.fillText("Paste JSON or press “Load Demo” in the left panel", W / 2, H / 2 + 40 * u * 1.2);
+    ctx.fillText(
+      "Paste journey JSON or upload a Google Timeline export in the left panel",
+      W / 2,
+      H / 2 + 40 * u * 1.2
+    );
     ctx.restore();
   }
 }

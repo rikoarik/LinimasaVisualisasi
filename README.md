@@ -13,12 +13,11 @@ npm run lint     # type-check
 
 ## Use
 
-1. On load, the **Jakarta → Bogor → Puncak → Bandung** motorcycle demo is ready — press **Play**.
-2. Or paste JSON / upload a file:
+1. Paste journey JSON or upload a file (left panel) — the preview plays straight from your data:
    - Simple format: `{"title":"...","vehicle":"motorcycle","points":[{"lat","lng","timestamp","name"?}]}`
    - **Google Maps Timeline export** (`semanticSegments`) — trips are auto-extracted into a pickable list
    - GeoJSON LineString (with optional `coordTimes`)
-3. Tune world (style/terrain/buildings/labels/trail), camera preset, then **Export Video**.
+2. Tune world (style/terrain/buildings/labels/trail), camera preset, then **Export Video**.
 
 ## Stack
 

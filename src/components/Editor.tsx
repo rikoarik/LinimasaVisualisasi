@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import MapStage, { type StageApi, type WorldToggles } from "./MapStage";
 import TimelineBar from "./TimelineBar";
 import LeftPanel from "./panels/LeftPanel";
@@ -8,7 +8,6 @@ import RightPanel from "./panels/RightPanel";
 import {
   compileJourney,
 } from "@/lib/journey/resample";
-import { DEMO_JOURNEY } from "@/lib/journey/demoJourney";
 import {
   parseJourneyInput,
   tripToSpec,
@@ -131,32 +130,6 @@ export default function Editor() {
     [loadSpec]
   );
 
-  const handleDemo = useCallback(() => {
-    setTrips([]);
-    loadSpec(DEMO_JOURNEY, null);
-  }, [loadSpec]);
-
-  useEffect(() => {
-    if (!ready) return;
-    const api = apiRef.current;
-    if (!api) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const journey = compileJourney(DEMO_JOURNEY);
-        if (!cancelled) {
-          api.loadJourney(journey, world.trail);
-          setCurrentTitle(journey.title);
-          setTimeout(() => api.engine.applyFrame(true), 400);
-        }
-      } catch {}
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
-
   const handleExport = useCallback(async () => {
     const api = apiRef.current;
     if (!api || !api.engine.journey) return;
@@ -195,7 +168,6 @@ export default function Editor() {
           onJsonText={setJsonText}
           onLoadJson={handleJsonText}
           onLoadFile={handleFile}
-          onLoadDemo={handleDemo}
           trips={trips}
           activeTripId={activeTripId}
           onSelectTrip={(t) => loadSpec(tripToSpec(t), t.id)}
