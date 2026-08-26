@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+dist
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+
+# Personal Google Timeline export (private location data, 42MB)
+Linimasa (1).json
+*.log
