@@ -8,6 +8,7 @@ import type {
   CameraPreset,
   CompiledJourney,
   MapStyleId,
+  VehicleKind,
 } from "@/lib/journey/types";
 import { JourneyEngine } from "@/lib/engine/JourneyEngine";
 import { RouteLayers } from "@/lib/engine/routeLayers";
@@ -36,6 +37,7 @@ export interface StageApi {
   routeLayers: RouteLayers;
   overlay: OverlayRenderer;
   loadJourney(journey: CompiledJourney, trail: boolean): void;
+  setVehicle(kind: VehicleKind): void;
 }
 
 interface Props {
@@ -186,6 +188,11 @@ export default function MapStage({ styleId, world, preset, onReady }: Props) {
               pitch: 0,
               bearing: 0,
             });
+            engine.applyFrame(true);
+          },
+          setVehicle(kind) {
+            vehicleLayer.setVehicle(kind);
+            if (journeyRef.current) journeyRef.current.vehicle = kind;
             engine.applyFrame(true);
           },
         });

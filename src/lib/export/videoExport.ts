@@ -139,9 +139,10 @@ export async function exportJourneyVideo(opts: {
   try {
     for (let i = 0; i <= 36; i++) {
       engine.seek((i / 36) * journey.durationPb);
-      await awaitMapIdle(map, 2500);
+      if (i % 3 === 2) await new Promise((r) => setTimeout(r, 25));
       if (opts.cancelled()) throw new Error("cancelled");
     }
+    await awaitMapIdle(map, 6000);
 
     const canvas = document.createElement("canvas");
     canvas.width = w;

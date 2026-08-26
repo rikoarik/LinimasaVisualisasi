@@ -112,7 +112,7 @@ export class JourneyEngine {
   }
 
   seek(pb: number) {
-    if (!this.journey) return;
+    if (!this.journey || !isFinite(pb)) return;
     this.time = clamp(pb, 0, this.journey.durationPb);
     this.applyFrame(true);
     this.notify(true);

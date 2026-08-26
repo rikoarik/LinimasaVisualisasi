@@ -63,6 +63,8 @@ export default function Editor() {
   const cancelRef = useRef(false);
 
   const matchAbort = useRef<AbortController | null>(null);
+  const lastSpecRef = useRef<JourneySpec | null>(null);
+  const lastTripIdRef = useRef<string | null>(null);
   const geomCache = useRef(new Map<string, [number, number][]>());
   const prefetching = useRef(new Set<string>());
   const [queueInfo, setQueueInfo] = useState<{ index: number; total: number } | null>(null);
@@ -99,6 +101,8 @@ export default function Editor() {
     async (inputSpec: JourneySpec, tripId: string | null, ctx?: { list: TripOption[]; index: number }) => {
       const api = apiRef.current;
       if (!api) return;
+      lastSpecRef.current = inputSpec;
+      lastTripIdRef.current = tripId;
       setParseMsg(null);
       setDownloadUrl(null);
       try {
@@ -195,6 +199,34 @@ export default function Editor() {
   useEffect(() => {
     (window as never as Record<string, unknown>).__jvDebugLoad = debugLoad;
   }, [debugLoad]);
+
+  useEffect(() => {
+    const api = apiRef.current;
+    const journey = api?.engine.journey;
+    const lastSpec = lastSpecRef.current;
+    if (!api || !journey || !lastSpec) return;
+
+    const effective =
+      vehicleOverride !== "auto"
+        ? vehicleOverride
+        : (lastSpec.vehicle as VehicleKind | undefined) ?? journey.vehicle;
+    if (effective === journey.vehicle) return;
+
+    const flightSwitch =
+      (effective === "airplane" || effective === "train") !==
+      (journey.vehicle === "airplane" || journey.vehicle === "train");
+
+    if (flightSwitch || effective === "airplane" || journey.vehicle === "airplane") {
+      loadSpec(lastSpec, lastTripIdRef.current, queueRef.current
+        ? { list: queueRef.current, index: queueInfo?.index ?? 0 }
+        : undefined);
+    } else {
+      journey.vehicle = effective;
+      api.setVehicle(effective);
+      setCurrentVehicle(effective);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleOverride]);
 
   const handleJsonText = useCallback(() => {
     const res = parseJourneyInput(jsonText);

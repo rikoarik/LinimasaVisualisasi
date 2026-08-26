@@ -29,24 +29,39 @@ export interface PrewarmOptions {
 
 export async function prewarmRoute(opts: PrewarmOptions): Promise<boolean> {
   const { map, engine, journey, onProgress } = opts;
-  const steps = opts.steps ?? Math.min(140, Math.max(40, Math.round(journey.durationPb / 2)));
+  const steps = opts.steps ?? Math.min(90, Math.max(30, Math.round(journey.durationPb / 2.5)));
+  const yieldMs = 25;
 
-  for (let i = 0; i <= steps; i++) {
-    if (engine.playing) return false;
-    const t = (i / steps) * journey.durationPb;
-    const { idx } = engine.sampleAt(t);
-    const sample = journey.samples[idx];
-    engine.director.update(sample, idx, t, 0.016, true);
-    const cam = engine.director.getCamera();
-    map.jumpTo({
-      center: [cam.lng, cam.lat],
-      zoom: cam.zoom,
-      pitch: cam.pitch,
-      bearing: cam.bearing,
-    });
-    await awaitMapIdle(map, 2200);
-    onProgress?.(Math.round((i / steps) * 100));
-    if (i % 4 === 0) await new Promise((r) => setTimeout(r, 0));
-  }
+  const sweep = async (total: number, reportFrom: number, reportTo: number) => {
+    for (let i = 0; i <= total; i++) {
+      if (engine.playing) return false;
+      const t = (i / total) * journey.durationPb;
+      const { idx } = engine.sampleAt(t);
+      const sample = journey.samples[idx];
+      engine.director.update(sample, idx, t, 0.016, true);
+      const cam = engine.director.getCamera();
+      map.jumpTo({
+        center: [cam.lng, cam.lat],
+        zoom: cam.zoom,
+        pitch: cam.pitch,
+        bearing: cam.bearing,
+      });
+      const pct = reportFrom + ((i / total) * (reportTo - reportTo * 0.35 - reportFrom));
+      onProgress?.(Math.min(reportTo - 1, Math.round(pct)));
+      if (i % 2 === 1) await new Promise((r) => setTimeout(r, yieldMs));
+    }
+    return true;
+  };
+
+  const ok = await sweep(steps, 0, 65);
+  if (!ok) return false;
+  onProgress?.(70);
+  await awaitMapIdle(map, 6000);
+
+  if (engine.playing) return false;
+  await sweep(Math.min(24, steps), 70, 95);
+  onProgress?.(97);
+  await awaitMapIdle(map, 4000);
+  onProgress?.(100);
   return true;
 }

@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import type { JourneyEngine } from "@/lib/engine/JourneyEngine";
 import { formatClock } from "@/lib/journey/types";
 
-const RATES = [0.5, 1, 2, 4];
+const RATES = [0.5, 1, 2, 4, 8];
 
 export default function TimelineBar({ engine }: { engine: JourneyEngine | null }) {
   const hud = useSyncExternalStore(
