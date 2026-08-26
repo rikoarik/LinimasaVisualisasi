@@ -181,10 +181,22 @@ function buildTimeWarp(ctrls: { tMs: number }[], targetPb: number): TimeWarp {
   };
 }
 
-function detectVehicle(spec: JourneySpec, spanM: number): VehicleKind {
+export function detectVehicle(spec: JourneySpec, spanM: number): VehicleKind {
   if (spec.vehicle && spec.vehicle !== ("auto" as VehicleKind)) return spec.vehicle;
   if (spanM > 800000) return "airplane";
   return "car";
+}
+
+export function resolveSpecVehicle(spec: JourneySpec): VehicleKind {
+  let spanM = 0;
+  for (let i = 1; i < spec.points.length; i++)
+    spanM += haversineDist(
+      spec.points[i - 1].lat,
+      spec.points[i - 1].lng,
+      spec.points[i].lat,
+      spec.points[i].lng
+    );
+  return detectVehicle(spec, spanM);
 }
 
 export function compileJourney(spec: JourneySpec, id = `j-${Date.now()}`): CompiledJourney {
@@ -214,7 +226,64 @@ export function compileJourney(spec: JourneySpec, id = `j-${Date.now()}`): Compi
   }
 
   const path = new CatmullRomPath();
-  path.build(pts, times);
+  const roadGeom = spec.roadGeometry;
+  let geomPts: RawPoint[];
+  let geomTimes: number[];
+  if (roadGeom && roadGeom.length >= 2 && vehicle !== "airplane" && vehicle !== "train") {
+    const cumRaw: number[] = [0];
+    for (let i = 1; i < pts.length; i++)
+      cumRaw.push(cumRaw[i - 1] + haversineDist(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng));
+    const totalRaw = Math.max(cumRaw[cumRaw.length - 1], 1e-6);
+
+    const mg: [number, number][] = [];
+    for (const c of roadGeom) {
+      const last = mg[mg.length - 1];
+      if (!last || Math.abs(last[0] - c[0]) > 1e-7 || Math.abs(last[1] - c[1]) > 1e-7) mg.push(c);
+    }
+    const cumM: number[] = [0];
+    for (let i = 1; i < mg.length; i++)
+      cumM.push(
+        cumM[i - 1] + haversineDist(mg[i - 1][1], mg[i - 1][0], mg[i][1], mg[i][0])
+      );
+    const totalM = Math.max(cumM[cumM.length - 1], 1e-6);
+
+    const timeAtDist = (dMetersFraction: number): number => {
+      const target = dMetersFraction * totalRaw;
+      let lo = 0;
+      let hi = cumRaw.length - 1;
+      while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (cumRaw[mid] <= target) lo = mid;
+        else hi = mid;
+      }
+      const span = cumRaw[hi] - cumRaw[lo];
+      const f = span > 0 ? (target - cumRaw[lo]) / span : 0;
+      return times[lo] + (times[Math.min(times.length - 1, hi)] - times[lo]) * f;
+    };
+
+    geomPts = mg.map(([lng, lat]) => ({ lat, lng }));
+    geomTimes = mg.map((_, i) => timeAtDist(cumM[i] / totalM));
+
+    for (let pi = 0; pi < pts.length; pi++) {
+      const p = pts[pi];
+      if (!p.name) continue;
+      const frac = cumRaw[pi] / totalRaw;
+      let bestI = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < mg.length; i++) {
+        const d = Math.abs(cumM[i] / totalM - frac);
+        if (d < bestD) {
+          bestD = d;
+          bestI = i;
+        }
+      }
+      if (!geomPts[bestI].name || bestD < 0.004) geomPts[bestI].name = p.name;
+    }
+  } else {
+    geomPts = pts;
+    geomTimes = times;
+  }
+  path.build(geomPts, geomTimes);
 
   let effTotal = 0;
   for (let i = 1; i < path.ctrls.length; i++) {
@@ -416,23 +485,35 @@ function buildEvents(
     });
   }
 
-  const gapsMin: number[] = [];
-  for (let i = 1; i < path.ctrls.length - 1; i++) {
-    gapsMin.push((path.ctrls[i + 1].tMs - path.ctrls[i].tMs) / 60000);
+  const rawTimes: number[] = [];
+  for (const p of pts) {
+    const t = p.timestamp ? new Date(p.timestamp).getTime() : NaN;
+    if (isFinite(t)) rawTimes.push(t);
   }
-  const sortedGaps = [...gapsMin].sort((a, b) => a - b);
-  const medianGap = sortedGaps.length ? sortedGaps[Math.floor(sortedGaps.length / 2)] : 5;
-  const stopThresholdMin = Math.max(9, Math.min(25, medianGap * 5));
-  for (let i = 1; i < path.ctrls.length - 1; i++) {
-    const gap = (path.ctrls[i + 1].tMs - path.ctrls[i].tMs) / 60000;
-    if (gap >= stopThresholdMin && gap < 24 * 60) {
-      events.push({
-        pb: clampPb(samples, findPbIndex(samples, path.ctrls[i].tMs)),
-        kind: "stop",
-        title: formatHm(path.ctrls[i].tMs),
-        subtitle: `Stop · ${Math.round(gap)} min`,
-      });
-      i++;
+  rawTimes.sort((a, b) => a - b);
+  const totalSpanMin = rawTimes.length >= 2 ? (rawTimes[rawTimes.length - 1] - rawTimes[0]) / 60000 : 0;
+  const stopThresholdMin = (() => {
+    const gaps: number[] = [];
+    for (let i = 1; i < rawTimes.length; i++)
+      gaps.push((rawTimes[i] - rawTimes[i - 1]) / 60000);
+    gaps.sort((a, b) => a - b);
+    const median = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 5;
+    return Math.max(9, Math.min(25, median * 5));
+  })();
+  if (rawTimes.length >= 3) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ta = pts[i].timestamp ? new Date(pts[i].timestamp as string).getTime() : NaN;
+      const tb = pts[i + 1].timestamp ? new Date(pts[i + 1].timestamp as string).getTime() : NaN;
+      if (!isFinite(ta) || !isFinite(tb)) continue;
+      const gap = (tb - ta) / 60000;
+      if (gap >= stopThresholdMin && gap < totalSpanMin * 0.6 && gap < 24 * 60) {
+        events.push({
+          pb: clampPb(samples, findPbIndex(samples, ta)),
+          kind: "stop",
+          title: formatHm(ta),
+          subtitle: `Stop · ${Math.round(gap)} min`,
+        });
+      }
     }
   }
 

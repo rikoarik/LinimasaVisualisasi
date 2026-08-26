@@ -25,6 +25,8 @@ interface Props {
   parseMsg: string | null;
   vehicleOverride: VehicleKind | "auto";
   onVehicleOverride: (v: VehicleKind | "auto") => void;
+  followRoads: boolean;
+  onFollowRoads: (v: boolean) => void;
   styleId: MapStyleId;
   onStyleId: (s: MapStyleId) => void;
   world: WorldToggles;
@@ -131,6 +133,16 @@ export default function LeftPanel(p: Props) {
             {p.parseMsg}
           </div>
         )}
+        <div className="mt-2">
+          <Toggle
+            label="Follow real roads"
+            value={p.followRoads}
+            onChange={p.onFollowRoads}
+          />
+          <div className="mt-1 px-1 text-[10.5px] leading-snug text-slate-600">
+            Snaps the route onto actual streets via free OSRM routing (car/bike/foot).
+          </div>
+        </div>
       </Section>
 
       {p.trips.length > 0 && (

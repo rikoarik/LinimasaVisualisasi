@@ -7,7 +7,9 @@ import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
 import {
   compileJourney,
+  resolveSpecVehicle,
 } from "@/lib/journey/resample";
+import { snapToRoads } from "@/lib/journey/mapMatch";
 import {
   parseJourneyInput,
   tripToSpec,
@@ -43,6 +45,7 @@ export default function Editor() {
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [parseMsg, setParseMsg] = useState<string | null>(null);
   const [vehicleOverride, setVehicleOverride] = useState<VehicleKind | "auto">("auto");
+  const [followRoads, setFollowRoads] = useState(true);
   const [currentTitle, setCurrentTitle] = useState<string | null>(null);
   const [settings, setSettings] = useState<ExportSettings>({
     aspect: "16:9",
@@ -58,27 +61,45 @@ export default function Editor() {
   const [ext, setExt] = useState<string | null>(null);
   const cancelRef = useRef(false);
 
+  const matchAbort = useRef<AbortController | null>(null);
+
   const loadSpec = useCallback(
-    (spec: JourneySpec, tripId: string | null) => {
+    async (inputSpec: JourneySpec, tripId: string | null) => {
       const api = apiRef.current;
       if (!api) return;
+      setParseMsg(null);
+      setDownloadUrl(null);
       try {
-        const withVehicle: JourneySpec = {
-          ...spec,
+        const spec: JourneySpec = {
+          ...inputSpec,
           vehicle:
             vehicleOverride !== "auto"
               ? vehicleOverride
-              : (spec.vehicle as VehicleKind | undefined),
+              : (inputSpec.vehicle as VehicleKind | undefined),
         };
-        const journey: CompiledJourney = compileJourney(withVehicle);
-        if (vehicleOverride === "auto" && !withVehicle.vehicle) {
-          journey.vehicle = "car";
+
+        if (followRoads && !spec.roadGeometry) {
+          const veh = resolveSpecVehicle(spec);
+          if (veh !== "airplane" && veh !== "train") {
+            setParseMsg("Matching route to real roads…");
+            matchAbort.current?.abort();
+            const ctrl = new AbortController();
+            matchAbort.current = ctrl;
+            try {
+              const m = await snapToRoads(spec.points, veh, ctrl.signal);
+              spec.roadGeometry = m.coords;
+            } catch (e) {
+              if ((e as Error)?.name === "AbortError") return;
+            }
+            if (matchAbort.current !== ctrl) return;
+          }
         }
+
+        const journey: CompiledJourney = compileJourney(spec);
         api.loadJourney(journey, world.trail);
         setCurrentTitle(journey.title);
         setActiveTripId(tripId);
         setParseMsg(null);
-        setDownloadUrl(null);
         setTimeout(() => {
           api.engine.applyFrame(true);
           api.engine.play();
@@ -87,16 +108,21 @@ export default function Editor() {
         setParseMsg(e instanceof Error ? e.message : String(e));
       }
     },
-    [vehicleOverride, world.trail]
+    [vehicleOverride, world.trail, followRoads]
+  );
+
+  const handleTimelineTrips = useCallback(
+    (res: ReturnType<typeof parseJourneyInput>) => {
+      setTrips(res.trips);
+      loadSpec(tripToSpec(res.trips[0]), res.trips[0].id);
+    },
+    [loadSpec]
   );
 
   const handleJsonText = useCallback(() => {
     const res = parseJourneyInput(jsonText);
     if (res.trips.length > 0) {
-      setTrips(res.trips);
-      setParseMsg(
-        `Google Timeline detected — ${res.trips.length} trips found. Pick one below to visualize.`
-      );
+      handleTimelineTrips(res);
       return;
     }
     if (res.journeys.length > 0) {
@@ -104,7 +130,7 @@ export default function Editor() {
       return;
     }
     setParseMsg(res.message ?? "Could not read journey JSON.");
-  }, [jsonText, loadSpec]);
+  }, [jsonText, loadSpec, handleTimelineTrips]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -114,10 +140,7 @@ export default function Editor() {
         setJsonText(text.length < 400_000 ? text : "");
         const res = parseJourneyInput(text);
         if (res.trips.length > 0) {
-          setTrips(res.trips);
-          setParseMsg(
-            `Google Timeline detected — ${res.trips.length} trips found. Pick one below to visualize.`
-          );
+          handleTimelineTrips(res);
         } else if (res.journeys.length > 0) {
           loadSpec(res.journeys[0], null);
         } else {
@@ -127,7 +150,7 @@ export default function Editor() {
         setParseMsg(`Failed reading file: ${e instanceof Error ? e.message : e}`);
       }
     },
-    [loadSpec]
+    [loadSpec, handleTimelineTrips]
   );
 
   const handleExport = useCallback(async () => {
@@ -174,6 +197,8 @@ export default function Editor() {
           parseMsg={parseMsg}
           vehicleOverride={vehicleOverride}
           onVehicleOverride={setVehicleOverride}
+          followRoads={followRoads}
+          onFollowRoads={setFollowRoads}
           styleId={styleId}
           onStyleId={setStyleId}
           world={world}

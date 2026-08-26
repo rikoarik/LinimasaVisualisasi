@@ -30,6 +30,7 @@ export interface JourneySpec {
   title: string;
   vehicle?: VehicleKind;
   points: RawPoint[];
+  roadGeometry?: [number, number][];
 }
 
 export type CameraPreset =
