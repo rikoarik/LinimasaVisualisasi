@@ -6,6 +6,7 @@ export interface OverlayOptions {
   overlays: boolean;
   letterbox: boolean;
   trail: boolean;
+  clear?: boolean;
 }
 
 export interface MarkerPx {
@@ -37,7 +38,7 @@ export class OverlayRenderer {
     opts: OverlayOptions
   ) {
     const u = H / 1080;
-    ctx.clearRect(0, 0, W, H);
+    if (opts.clear !== false) ctx.clearRect(0, 0, W, H);
 
     if (!journey) {
       this.drawEmptyState(ctx, W, H, u);

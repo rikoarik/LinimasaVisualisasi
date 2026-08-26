@@ -28,6 +28,7 @@ import {
   type ExportProgress,
   type ExportSettings,
 } from "@/lib/export/videoExport";
+import { prewarmRoute } from "@/lib/engine/prewarm";
 
 export default function Editor() {
   const apiRef = useRef<StageApi | null>(null);
@@ -52,7 +53,6 @@ export default function Editor() {
     aspect: "16:9",
     resolution: 1080,
     fps: 30,
-    durationSec: "auto",
     overlays: true,
     letterbox: true,
   });
@@ -146,10 +146,21 @@ export default function Editor() {
           setQueueInfo(null);
         }
         if (ctx) prefetchTrip(ctx.list, ctx.index);
+
+        setParseMsg("Preparing map… 0%");
+        const completed = await prewarmRoute({
+          map: api.map,
+          engine: api.engine,
+          journey,
+          onProgress: (pct) => setParseMsg(`Preparing map… ${pct}%`),
+        });
+        api.engine.director.reset(journey);
+        api.engine.seek(0);
+        setParseMsg(null);
         setTimeout(() => {
           api.engine.applyFrame(true);
-          api.engine.play();
-        }, 350);
+          if (completed || !api.engine.playing) api.engine.play();
+        }, 150);
       } catch (e) {
         setParseMsg(e instanceof Error ? e.message : String(e));
       }
@@ -265,6 +276,7 @@ export default function Editor() {
       }
     } finally {
       setExporting(false);
+      apiRef.current?.engine.pause();
     }
   }, [settings, styleId]);
 

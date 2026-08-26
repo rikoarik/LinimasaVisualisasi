@@ -167,22 +167,6 @@ export default function RightPanel(p: Props) {
             />
           </div>
 
-          <div>
-            <div className="mb-1 text-[11px] text-slate-500">Duration</div>
-            <Seg
-              options={[
-                { v: "auto" as const, l: "Auto" },
-                { v: 30 as const, l: "30s" },
-                { v: 60 as const, l: "60s" },
-                { v: 120 as const, l: "2m" },
-              ]}
-              value={p.settings.durationSec}
-              onChange={(v) =>
-                p.onSettings({ ...p.settings, durationSec: v })
-              }
-            />
-          </div>
-
           <div className="grid grid-cols-2 gap-1.5 pt-0.5">
             <button
               disabled={busy}

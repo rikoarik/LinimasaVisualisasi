@@ -152,6 +152,7 @@ export default function MapStage({ styleId, world, preset, onReady }: Props) {
         fadeDuration: 0,
         canvasContextAttributes: {
           antialias: true,
+          preserveDrawingBuffer: true,
         },
       });
       mapRef.current = map;

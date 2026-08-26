@@ -1,5 +1,6 @@
 import type { Map as MlMap } from "maplibre-gl";
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
+import { awaitMapIdle } from "../engine/prewarm";
 import type { CompiledJourney, MapStyleId } from "../journey/types";
 import { JourneyEngine } from "../engine/JourneyEngine";
 import { OverlayRenderer } from "../engine/overlayRenderer";
@@ -11,7 +12,6 @@ export interface ExportSettings {
   aspect: AspectId;
   resolution: 720 | 1080;
   fps: 30 | 60;
-  durationSec: number | "auto";
   overlays: boolean;
   letterbox: boolean;
 }
@@ -44,7 +44,7 @@ export function outputSize(aspect: AspectId, resolution: 720 | 1080): { w: numbe
   return { w: Math.max(2, w), h: Math.max(2, h) };
 }
 
-const CODEC_CANDIDATES = ["avc1.640034", "avc1.4d0034", "avc1.42003e", "avc1.42001f"];
+const CODEC_CANDIDATES = ["avc1.42002a", "avc1.42001f", "avc1.4d0032", "avc1.640034"];
 
 async function pickCodec(w: number, h: number, fps: number, bitrate: number): Promise<string | null> {
   if (typeof VideoEncoder === "undefined") return null;
@@ -65,10 +65,43 @@ async function pickCodec(w: number, h: number, fps: number, bitrate: number): Pr
 
 function nextRender(map: MlMap): Promise<void> {
   return new Promise((resolve) => {
-    const handler = () => resolve();
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      map.off("render", handler);
+      clearTimeout(timer);
+      resolve();
+    };
+    const handler = () => finish();
+    const timer = setTimeout(finish, 500);
     map.once("render", handler);
     map.triggerRepaint();
-    setTimeout(() => resolve(), 400);
+  });
+}
+
+function captureOnRender(map: MlMap, capture: () => void): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      map.off("render", handler);
+      clearTimeout(timer);
+      resolve();
+    };
+    const handler = () => {
+      capture();
+      finish();
+    };
+    const timer = setTimeout(() => {
+      if (!done) {
+        capture();
+        finish();
+      }
+    }, 500);
+    map.once("render", handler);
+    map.triggerRepaint();
   });
 }
 
@@ -84,8 +117,7 @@ export async function exportJourneyVideo(opts: {
 }): Promise<{ blob: Blob; ext: string }> {
   const { map, engine, journey, overlayRenderer, settings } = opts;
   const { w, h } = outputSize(settings.aspect, settings.resolution);
-  const wallDuration =
-    settings.durationSec === "auto" ? journey.durationPb : settings.durationSec;
+  const wallDuration = journey.durationPb;
   const totalFrames = Math.max(2, Math.round(wallDuration * settings.fps));
 
   const container = map.getContainer();
@@ -107,7 +139,7 @@ export async function exportJourneyVideo(opts: {
   try {
     for (let i = 0; i <= 36; i++) {
       engine.seek((i / 36) * journey.durationPb);
-      await nextRender(map);
+      await awaitMapIdle(map, 2500);
       if (opts.cancelled()) throw new Error("cancelled");
     }
 
@@ -137,16 +169,18 @@ export async function exportJourneyVideo(opts: {
       for (let fIdx = 0; fIdx < totalFrames; fIdx++) {
         if (opts.cancelled()) throw new Error("cancelled");
         engine.seek((fIdx / totalFrames) * journey.durationPb);
-        await nextRender(map);
-        ctx.drawImage(map.getCanvas(), 0, 0, w, h);
-        if (settings.overlays || settings.letterbox) {
-          const hud = engine.getHud();
-          overlayRenderer.draw(ctx, w, h, hud, journey, map, opts.styleId, {
-            overlays: settings.overlays,
-            letterbox: settings.letterbox,
-            trail: settings.trail ?? true,
-          });
-        }
+        await captureOnRender(map, () => {
+          ctx.drawImage(map.getCanvas(), 0, 0, w, h);
+          if (settings.overlays || settings.letterbox) {
+            const hud = engine.getHud();
+            overlayRenderer.draw(ctx, w, h, hud, journey, map, opts.styleId, {
+              overlays: settings.overlays,
+              letterbox: settings.letterbox,
+              trail: settings.trail ?? true,
+              clear: false,
+            });
+          }
+        });
         const frame = new VideoFrame(canvas, {
           timestamp: Math.round((fIdx * 1e6) / settings.fps),
           duration: Math.round(1e6 / settings.fps),
@@ -166,8 +200,7 @@ export async function exportJourneyVideo(opts: {
           await new Promise((r) => setTimeout(r, 0));
         }
       }
-      opts.onProgress({ phase: "encoding", frame: totalFrames, totalFrames, pct: 93 });
-      await encoder.flush();
+      opts.onProgress({ phase: "encoding", frame: totalFrames, totalFrames, pct: 93 });      await encoder.flush();
       muxer.finalize();
       const buffer = (muxer.target as ArrayBufferTarget).buffer;
       opts.onProgress({ phase: "done", frame: totalFrames, totalFrames, pct: 100 });
@@ -238,6 +271,7 @@ async function mediaRecorderFallback(o: {
         overlays: o.settings.overlays,
         letterbox: o.settings.letterbox,
         trail: o.settings.trail ?? true,
+        clear: false,
       });
       o.onProgress({
         phase: "rendering",
