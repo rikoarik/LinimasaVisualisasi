@@ -2,14 +2,14 @@ import * as THREE from "three";
 import type { VehicleKind } from "../journey/types";
 
 const M = {
-  body: new THREE.MeshLambertMaterial({ color: 0xd8dde6 }),
+  body: new THREE.MeshLambertMaterial({ color: 0xd8dde6, emissive: 0x1c1f24 }),
   dark: new THREE.MeshLambertMaterial({ color: 0x22262e }),
-  accent: new THREE.MeshLambertMaterial({ color: 0xe0492f }),
+  accent: new THREE.MeshLambertMaterial({ color: 0xe0492f, emissive: 0x5a1408 }),
   glass: new THREE.MeshLambertMaterial({ color: 0x8fb7d9, transparent: true, opacity: 0.85 }),
   tire: new THREE.MeshLambertMaterial({ color: 0x14161a }),
   metal: new THREE.MeshLambertMaterial({ color: 0x9aa3b0 }),
   skin: new THREE.MeshLambertMaterial({ color: 0xd9a066 }),
-  shirt: new THREE.MeshLambertMaterial({ color: 0x2f6fed }),
+  shirt: new THREE.MeshLambertMaterial({ color: 0x2f6fed, emissive: 0x0a1c4d }),
   pants: new THREE.MeshLambertMaterial({ color: 0x2b2f38 }),
 };
 
@@ -17,6 +17,7 @@ export interface VehicleModel {
   group: THREE.Group;
   wheels: THREE.Object3D[];
   lengthMeters: number;
+  displayScale: number;
 }
 
 function box(w: number, h: number, d: number, mat: THREE.Material): THREE.Mesh {
@@ -73,7 +74,7 @@ function buildCar(): VehicleModel {
     g.add(w);
     wheels.push(w);
   }
-  return { group: g, wheels, lengthMeters: 4.6 };
+  return { group: g, wheels, lengthMeters: 4.6, displayScale: 8 };
 }
 
 function buildBus(): VehicleModel {
@@ -99,7 +100,7 @@ function buildBus(): VehicleModel {
       wheels.push(w);
     }
   }
-  return { group: g, wheels, lengthMeters: 11 };
+  return { group: g, wheels, lengthMeters: 11, displayScale: 4.5 };
 }
 
 function buildTrain(): VehicleModel {
@@ -130,7 +131,7 @@ function buildTrain(): VehicleModel {
       wheels.push(w);
     }
   }
-  return { group: g, wheels, lengthMeters: 14 };
+  return { group: g, wheels, lengthMeters: 14, displayScale: 4 };
 }
 
 function buildMotorcycle(): VehicleModel {
@@ -188,7 +189,7 @@ function buildMotorcycle(): VehicleModel {
   const hl = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff2c4 }));
   hl.position.set(0, 1.02, -0.92);
   g.add(hl);
-  return { group: g, wheels, lengthMeters: 2.2 };
+  return { group: g, wheels, lengthMeters: 2.2, displayScale: 12 };
 }
 
 function buildBicycle(): VehicleModel {
@@ -237,7 +238,7 @@ function buildBicycle(): VehicleModel {
     g.add(w);
     wheels.push(w);
   }
-  return { group: g, wheels, lengthMeters: 1.8 };
+  return { group: g, wheels, lengthMeters: 1.8, displayScale: 11 };
 }
 
 function buildWalker(): VehicleModel {
@@ -266,7 +267,7 @@ function buildWalker(): VehicleModel {
     arms.push(arm);
   }
   g.userData.walkParts = { legs, arms };
-  return { group: g, wheels: [], lengthMeters: 0.7 };
+  return { group: g, wheels: [], lengthMeters: 0.7, displayScale: 14 };
 }
 
 function buildAirplane(): VehicleModel {
@@ -311,7 +312,7 @@ function buildAirplane(): VehicleModel {
     intake.position.set(sx, 1.35, sz - 1.62);
     g.add(intake);
   }
-  return { group: g, wheels: [], lengthMeters: 17 };
+  return { group: g, wheels: [], lengthMeters: 17, displayScale: 3 };
 }
 
 export function buildVehicle(kind: VehicleKind): VehicleModel {

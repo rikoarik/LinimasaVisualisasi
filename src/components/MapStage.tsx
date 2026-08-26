@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { Map as MlMap, StyleSpecification } from "maplibre-gl";
 import maplibregl from "maplibre-gl";
+import * as THREE from "three";
 import type {
   CameraPreset,
   CompiledJourney,
@@ -127,7 +128,11 @@ export default function MapStage({ styleId, world, preset, onReady }: Props) {
         journeyRef.current,
         map,
         styleRef.current,
-        { overlays: true, letterbox: false }
+        {
+          overlays: true,
+          letterbox: false,
+          trail: worldRef.current.trail,
+        }
       );
       ctx.restore();
     };
@@ -181,6 +186,11 @@ export default function MapStage({ styleId, world, preset, onReady }: Props) {
             engine.applyFrame(true);
           },
         });
+        const w = window as never as Record<string, unknown>;
+        w.__jvVL = vehicleLayer;
+        w.__jvTHREE = THREE;
+        w.__jvMerc = maplibregl.MercatorCoordinate;
+        w.__jvMapReady = true;
       });
 
       map.on("style.load", () => {

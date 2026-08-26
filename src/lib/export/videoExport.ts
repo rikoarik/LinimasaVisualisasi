@@ -7,6 +7,7 @@ import { OverlayRenderer } from "../engine/overlayRenderer";
 export type AspectId = "16:9" | "9:16" | "1:1" | "4:5";
 
 export interface ExportSettings {
+  trail?: boolean;
   aspect: AspectId;
   resolution: 720 | 1080;
   fps: 30 | 60;
@@ -139,6 +140,7 @@ export async function exportJourneyVideo(opts: {
           overlayRenderer.draw(ctx, w, h, hud, journey, map, opts.styleId, {
             overlays: settings.overlays,
             letterbox: settings.letterbox,
+            trail: settings.trail ?? true,
           });
         }
         const frame = new VideoFrame(canvas, {
@@ -228,6 +230,7 @@ async function mediaRecorderFallback(o: {
       o.overlayRenderer.draw(o.ctx, o.w, o.h, hud, o.journey, o.map, o.styleId, {
         overlays: o.settings.overlays,
         letterbox: o.settings.letterbox,
+        trail: o.settings.trail ?? true,
       });
       o.onProgress({
         phase: "rendering",

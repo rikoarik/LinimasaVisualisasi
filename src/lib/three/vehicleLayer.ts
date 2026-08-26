@@ -36,10 +36,14 @@ export class VehicleLayer {
     if (this.layer) return;
     this.map = map;
     const self = this;
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x445066, 1.15));
-    const sun = new THREE.DirectionalLight(0xfff3e0, 1.35);
-    sun.position.set(-60, 90, -40).normalize();
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x5a6478, 1.5));
+    const sun = new THREE.DirectionalLight(0xfff3e0, 1.5);
+    sun.position.set(-40, 85, 25).normalize();
     this.scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xcfe0ff, 0.6);
+    fill.position.set(50, 40, -60).normalize();
+    this.scene.add(fill);
 
     this.layer = {
       id: "jv-vehicle",
@@ -62,10 +66,12 @@ export class VehicleLayer {
         if (transition > 0.001) {
           l = globeModelMatrix(self.pose.lng, self.pose.lat, self.pose.elev);
           const zoom = map.getZoom();
-          const boost = Math.min(280, Math.pow(2, Math.max(0, 13 - zoom)) * 0.9);
+          const boost =
+            Math.min(280, Math.pow(2, Math.max(0, 13 - zoom)) * 0.9) *
+            (self.model.displayScale || 1);
           l.multiply(new THREE.Matrix4().makeScale(boost, boost, boost));
         } else {
-          l = mercatorModelMatrix(map, self.pose);
+          l = mercatorModelMatrix(map, self.pose, self.model.displayScale);
         }
         const m = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix as never);
         self.camera.projectionMatrix = m.multiply(l);
@@ -137,20 +143,21 @@ export class VehicleLayer {
   }
 }
 
-function mercatorModelMatrix(map: MlMap & { transform?: any }, pose: VehiclePose): THREE.Matrix4 {
-  const mc = MercatorCoordinate.fromLngLat({ lng: pose.lng, lat: pose.lat }, 0);
+function mercatorModelMatrix(
+  map: MlMap & { transform?: any },
+  pose: VehiclePose,
+  displayScale: number
+): THREE.Matrix4 {
+  const mc = MercatorCoordinate.fromLngLat({ lng: pose.lng, lat: pose.lat }, pose.elev);
   const scale = mc.meterInMercatorCoordinateUnits();
-  let tz = mc.z;
-  const tr = map.transform;
-  if (map.terrain && tr && typeof tr.elevation === "number") {
-    tz += (pose.elev - tr.elevation) * scale;
-  } else {
-    tz += pose.elev * scale;
-  }
+  const zoom = typeof map.getZoom === "function" ? map.getZoom() : 16;
+  const sizeBoost = Math.min(12, Math.pow(2, Math.max(0, 16.8 - zoom)) * 1.6);
+  const k = displayScale * sizeBoost;
   return new THREE.Matrix4()
-    .makeTranslation(mc.x, mc.y, tz)
+    .makeTranslation(mc.x, mc.y, mc.z)
     .scale(new THREE.Vector3(scale, -scale, scale))
-    .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2))
+    .multiply(new THREE.Matrix4().makeScale(k, k, k));
 }
 
 function globeModelMatrix(lng: number, lat: number, altitudeM: number): THREE.Matrix4 {

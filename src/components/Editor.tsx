@@ -47,6 +47,7 @@ export default function Editor() {
   const [vehicleOverride, setVehicleOverride] = useState<VehicleKind | "auto">("auto");
   const [followRoads, setFollowRoads] = useState(true);
   const [currentTitle, setCurrentTitle] = useState<string | null>(null);
+  const [currentVehicle, setCurrentVehicle] = useState<VehicleKind | null>(null);
   const [settings, setSettings] = useState<ExportSettings>({
     aspect: "16:9",
     resolution: 1080,
@@ -73,6 +74,7 @@ export default function Editor() {
     const engine = apiRef.current?.engine;
     if (!engine) return;
     engine.onEnded = () => advanceRef.current();
+    (window as never as Record<string, unknown>).__jvEngine = engine;
     return () => {
       engine.onEnded = null;
     };
@@ -133,6 +135,7 @@ export default function Editor() {
         const journey: CompiledJourney = compileJourney(spec);
         api.loadJourney(journey, world.trail);
         setCurrentTitle(journey.title);
+        setCurrentVehicle(journey.vehicle);
         setActiveTripId(tripId);
         setParseMsg(null);
         if (ctx) {
@@ -161,6 +164,26 @@ export default function Editor() {
     },
     [loadSpec]
   );
+
+  const debugLoad = useCallback(
+    (text: string) => {
+      const res = parseJourneyInput(text);
+      if (res.trips.length > 0) {
+        handleTimelineTrips(res);
+        return res.trips.length;
+      }
+      if (res.journeys.length > 0) {
+        loadSpec(res.journeys[0], null);
+        return 1;
+      }
+      throw new Error(res.message ?? "parse failed");
+    },
+    [loadSpec, handleTimelineTrips]
+  );
+
+  useEffect(() => {
+    (window as never as Record<string, unknown>).__jvDebugLoad = debugLoad;
+  }, [debugLoad]);
 
   const handleJsonText = useCallback(() => {
     const res = parseJourneyInput(jsonText);
@@ -286,7 +309,7 @@ export default function Editor() {
                 <>
                   <div className="text-[12px] font-bold text-white">{currentTitle}</div>
                   <div className="mt-0.5 flex gap-2 text-[10.5px] font-medium text-slate-300/80">
-                    <span>{VEHICLE_LABEL[vehicleOverride === "auto" ? "car" : vehicleOverride]}</span>
+                    <span>{VEHICLE_LABEL[currentVehicle ?? "car"]}</span>
                     <span>·</span>
                     <span className="capitalize">
                       {preset === "auto" ? "Cinematic Auto" : `${preset} cam`}

@@ -5,6 +5,7 @@ import type { HudSnapshot } from "./JourneyEngine";
 export interface OverlayOptions {
   overlays: boolean;
   letterbox: boolean;
+  trail: boolean;
 }
 
 export interface MarkerPx {
@@ -44,6 +45,7 @@ export class OverlayRenderer {
     }
 
     this.drawVignette(ctx, W, H);
+    if (opts.trail) this.drawTrail(ctx, journey, map, style, hud);
     if (opts.overlays) {
       const m = moodFor(style);
       this.drawTitleBlock(ctx, W, u, hud, m);
@@ -60,6 +62,60 @@ export class OverlayRenderer {
     g.addColorStop(1, "rgba(2,6,14,0.34)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+  }
+
+  private drawTrail(
+    ctx: CanvasRenderingContext2D,
+    journey: CompiledJourney,
+    map: MlMap | null,
+    style: MapStyleId,
+    hud: HudSnapshot
+  ) {
+    if (!map || journey.samples.length < 2) return;
+    const m = moodFor(style);
+    const samples = journey.samples;
+    const total = samples.length;
+    const traveled = Math.max(2, Math.min(total, Math.round((hud.progressPct / 100) * total)));
+    const step = Math.max(1, Math.floor(total / 700));
+
+    const projectPath = (from: number, to: number) => {
+      ctx.beginPath();
+      let started = false;
+      for (let i = from; i <= to; i += step) {
+        const s = samples[i];
+        const p = map.project([s.lng, s.lat]);
+        if (!isFinite(p.x) || !isFinite(p.y)) continue;
+        if (!started) {
+          ctx.moveTo(p.x, p.y);
+          started = true;
+        } else ctx.lineTo(p.x, p.y);
+      }
+    };
+
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    ctx.setLineDash([7, 9]);
+    projectPath(traveled - 1, total - 1);
+    ctx.strokeStyle = style === "light" || style === "minimal" || style === "bright" ? "rgba(15,23,42,0.30)" : "rgba(255,255,255,0.30)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.shadowColor = m.accent;
+    ctx.shadowBlur = 16;
+    projectPath(0, traveled - 1);
+    ctx.strokeStyle = m.accent;
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 9;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = style === "light" || style === "minimal" || style === "bright" ? "#0369a1" : "#ffd27a";
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawLetterbox(ctx: CanvasRenderingContext2D, W: number, H: number) {
