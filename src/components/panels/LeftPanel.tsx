@@ -22,6 +22,9 @@ interface Props {
   trips: TripOption[];
   activeTripId: string | null;
   onSelectTrip: (trip: TripOption) => void;
+  onPlayAll: () => void;
+  queueInfo: { index: number; total: number } | null;
+  onSkipQueue: () => void;
   parseMsg: string | null;
   vehicleOverride: VehicleKind | "auto";
   onVehicleOverride: (v: VehicleKind | "auto") => void;
@@ -33,7 +36,13 @@ interface Props {
   onWorld: (w: WorldToggles) => void;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="border-b border-[#1b2333] px-4 py-4">
       <div className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-500">
@@ -146,7 +155,35 @@ export default function LeftPanel(p: Props) {
       </Section>
 
       {p.trips.length > 0 && (
-        <Section title={`Google Timeline trips (${p.trips.length})`}>
+        <Section
+          title={
+            <span className="flex items-center justify-between">
+              <span>Google Timeline trips ({p.trips.length})</span>
+              {p.queueInfo ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="rounded-md bg-[#18243c] px-1.5 py-0.5 font-mono text-[10px] text-sky-300">
+                    {p.queueInfo.index + 1}/{p.queueInfo.total}
+                  </span>
+                  <button
+                    onClick={p.onSkipQueue}
+                    title="Skip to next trip"
+                    className="rounded-md bg-[#0d1220] px-1.5 py-0.5 text-[11px] font-bold text-sky-300 transition hover:bg-[#141d31]"
+                  >
+                    ⏭
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={p.onPlayAll}
+                  title="Play every trip back-to-back"
+                  className="rounded-md bg-[#231d10] px-2 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-400/40 transition hover:bg-[#2b2414]"
+                >
+                  ▶ Play All
+                </button>
+              )}
+            </span>
+          }
+        >
           <div className="panel-scroll max-h-[210px] space-y-1.5 pr-1">
             {p.trips.map((t) => (
               <button

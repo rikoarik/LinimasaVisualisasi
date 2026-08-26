@@ -64,6 +64,7 @@ export class JourneyEngine {
   private snapshot: HudSnapshot = EMPTY_SNAPSHOT;
   private lastNotify = 0;
   private frameCb: ((info: FrameInfo) => void) | null = null;
+  onEnded: (() => void) | null = null;
 
   setFrameCallback(cb: ((info: FrameInfo) => void) | null) {
     this.frameCb = cb;
@@ -135,6 +136,10 @@ export class JourneyEngine {
           this.time = this.journey.durationPb;
           this.playing = false;
           this.notify(true);
+          const cb = this.onEnded;
+          if (cb) {
+            setTimeout(() => cb(), 1200);
+          }
         }
         this.applyFrame(false);
         this.notify(false);

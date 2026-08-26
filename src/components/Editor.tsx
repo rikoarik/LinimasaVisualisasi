@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import MapStage, { type StageApi, type WorldToggles } from "./MapStage";
 import TimelineBar from "./TimelineBar";
 import LeftPanel from "./panels/LeftPanel";
@@ -62,9 +62,39 @@ export default function Editor() {
   const cancelRef = useRef(false);
 
   const matchAbort = useRef<AbortController | null>(null);
+  const geomCache = useRef(new Map<string, [number, number][]>());
+  const prefetching = useRef(new Set<string>());
+  const [queueInfo, setQueueInfo] = useState<{ index: number; total: number } | null>(null);
+  const queueRef = useRef<TripOption[] | null>(null);
+  const advanceRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    if (!ready) return;
+    const engine = apiRef.current?.engine;
+    if (!engine) return;
+    engine.onEnded = () => advanceRef.current();
+    return () => {
+      engine.onEnded = null;
+    };
+  }, [ready]);
+
+  const prefetchTrip = useCallback(
+    (list: TripOption[], index: number) => {
+      const next = list[index + 1];
+      if (!next || !followRoads) return;
+      if (geomCache.current.has(next.id) || prefetching.current.has(next.id)) return;
+      prefetching.current.add(next.id);
+      const spec = tripToSpec(next);
+      snapToRoads(spec.points, resolveSpecVehicle(spec))
+        .then((m) => geomCache.current.set(next.id, m.coords))
+        .catch(() => {})
+        .finally(() => prefetching.current.delete(next.id));
+    },
+    [followRoads]
+  );
 
   const loadSpec = useCallback(
-    async (inputSpec: JourneySpec, tripId: string | null) => {
+    async (inputSpec: JourneySpec, tripId: string | null, ctx?: { list: TripOption[]; index: number }) => {
       const api = apiRef.current;
       if (!api) return;
       setParseMsg(null);
@@ -78,6 +108,10 @@ export default function Editor() {
               : (inputSpec.vehicle as VehicleKind | undefined),
         };
 
+        if (followRoads && !spec.roadGeometry && tripId && geomCache.current.has(tripId)) {
+          spec.roadGeometry = geomCache.current.get(tripId);
+        }
+
         if (followRoads && !spec.roadGeometry) {
           const veh = resolveSpecVehicle(spec);
           if (veh !== "airplane" && veh !== "train") {
@@ -88,6 +122,7 @@ export default function Editor() {
             try {
               const m = await snapToRoads(spec.points, veh, ctrl.signal);
               spec.roadGeometry = m.coords;
+              if (tripId) geomCache.current.set(tripId, m.coords);
             } catch (e) {
               if ((e as Error)?.name === "AbortError") return;
             }
@@ -100,6 +135,14 @@ export default function Editor() {
         setCurrentTitle(journey.title);
         setActiveTripId(tripId);
         setParseMsg(null);
+        if (ctx) {
+          queueRef.current = ctx.list;
+          setQueueInfo({ index: ctx.index, total: ctx.list.length });
+        } else {
+          queueRef.current = null;
+          setQueueInfo(null);
+        }
+        if (ctx) prefetchTrip(ctx.list, ctx.index);
         setTimeout(() => {
           api.engine.applyFrame(true);
           api.engine.play();
@@ -108,7 +151,7 @@ export default function Editor() {
         setParseMsg(e instanceof Error ? e.message : String(e));
       }
     },
-    [vehicleOverride, world.trail, followRoads]
+    [vehicleOverride, world.trail, followRoads, prefetchTrip]
   );
 
   const handleTimelineTrips = useCallback(
@@ -153,8 +196,27 @@ export default function Editor() {
     [loadSpec, handleTimelineTrips]
   );
 
-  const handleExport = useCallback(async () => {
-    const api = apiRef.current;
+  const playAll = useCallback(() => {
+    if (!trips.length) return;
+    loadSpec(tripToSpec(trips[0]), trips[0].id, { list: trips, index: 0 });
+  }, [trips, loadSpec]);
+
+  useEffect(() => {
+    advanceRef.current = () => {
+      const list = queueRef.current;
+      if (!list || !queueInfo) return;
+      const nextIdx = queueInfo.index + 1;
+      if (nextIdx >= list.length) {
+        queueRef.current = null;
+        setQueueInfo(null);
+        return;
+      }
+      const next = list[nextIdx];
+      loadSpec(tripToSpec(next), next.id, { list, index: nextIdx });
+    };
+  }, [queueInfo, loadSpec]);
+
+  const handleExport = useCallback(async () => {    const api = apiRef.current;
     if (!api || !api.engine.journey) return;
     cancelRef.current = false;
     setExporting(true);
@@ -194,6 +256,9 @@ export default function Editor() {
           trips={trips}
           activeTripId={activeTripId}
           onSelectTrip={(t) => loadSpec(tripToSpec(t), t.id)}
+          onPlayAll={playAll}
+          queueInfo={queueInfo}
+          onSkipQueue={() => advanceRef.current()}
           parseMsg={parseMsg}
           vehicleOverride={vehicleOverride}
           onVehicleOverride={setVehicleOverride}
