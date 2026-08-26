@@ -152,16 +152,18 @@ export default function MapStage({ styleId, world, preset, onReady }: Props) {
         fadeDuration: 0,
         canvasContextAttributes: {
           antialias: true,
-          preserveDrawingBuffer: true,
         },
       });
       mapRef.current = map;
       engine.map = map;
       routeLayersRef.current = new RouteLayers(map);
+      try {
+        map.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      } catch {}
 
       map.on("load", () => {
         applyWorldToMap(map, styleRef.current, worldRef.current, journeyRef.current?.isFlight ?? false);
-        vehicleLayer.attach(map);
+        vehicleLayer.attach(map, () => engine.playing);
         engine.startLoop();
         readyRef.current({
           map,

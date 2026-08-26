@@ -30,11 +30,13 @@ export class VehicleLayer {
   private model: VehicleModel | null = null;
   private pose: VehiclePose | null = null;
   private animPhase = 0;
+  private shouldRepaint: (() => boolean) | null = null;
   kind: VehicleKind = "car";
 
-  attach(map: MlMap) {
+  attach(map: MlMap, shouldRepaint?: () => boolean) {
     if (this.layer) return;
     this.map = map;
+    this.shouldRepaint = shouldRepaint ?? null;
     const self = this;
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.4));
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x5a6478, 1.5));
@@ -77,7 +79,9 @@ export class VehicleLayer {
         self.camera.projectionMatrix = m.multiply(l);
         self.renderer.resetState();
         self.renderer.render(self.scene, self.camera);
-        map.triggerRepaint();
+        if (!self.shouldRepaint || self.shouldRepaint()) {
+          map.triggerRepaint();
+        }
       },
     };
 

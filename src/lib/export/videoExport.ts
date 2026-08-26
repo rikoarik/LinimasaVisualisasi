@@ -90,19 +90,23 @@ export async function exportJourneyVideo(opts: {
 
   const container = map.getContainer();
   const prevCss = container.style.cssText;
+  const prevRatio = map.getPixelRatio();
   container.style.position = "fixed";
   container.style.left = "-10000px";
   container.style.top = "0";
   container.style.width = `${w}px`;
   container.style.height = `${h}px`;
   engine.pause();
+  try {
+    map.setPixelRatio(1);
+  } catch {}
   map.resize();
 
   opts.onProgress({ phase: "preparing", frame: 0, totalFrames, pct: 0 });
 
   try {
-    for (let i = 0; i <= 20; i++) {
-      engine.seek((i / 20) * journey.durationPb);
+    for (let i = 0; i <= 36; i++) {
+      engine.seek((i / 36) * journey.durationPb);
       await nextRender(map);
       if (opts.cancelled()) throw new Error("cancelled");
     }
@@ -187,6 +191,9 @@ export async function exportJourneyVideo(opts: {
     });
   } finally {
     container.style.cssText = prevCss;
+    try {
+      map.setPixelRatio(prevRatio);
+    } catch {}
     map.resize();
     engine.seek(engine.time);
   }

@@ -76,7 +76,7 @@ export class OverlayRenderer {
     const samples = journey.samples;
     const total = samples.length;
     const traveled = Math.max(2, Math.min(total, Math.round((hud.progressPct / 100) * total)));
-    const step = Math.max(1, Math.floor(total / 700));
+    const step = Math.max(1, Math.floor(total / 420));
 
     const projectPath = (from: number, to: number) => {
       ctx.beginPath();
@@ -107,11 +107,13 @@ export class OverlayRenderer {
     ctx.shadowBlur = 16;
     projectPath(0, traveled - 1);
     ctx.strokeStyle = m.accent;
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = 9;
+    ctx.globalAlpha = 0.18;
+    ctx.lineWidth = 16;
+    ctx.stroke();
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 8;
     ctx.stroke();
     ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = style === "light" || style === "minimal" || style === "bright" ? "#0369a1" : "#ffd27a";
     ctx.stroke();
@@ -134,11 +136,8 @@ export class OverlayRenderer {
   ) {
     const pad = 46;
     ctx.save();
-    ctx.shadowColor = m.shadow;
-    ctx.shadowBlur = 18;
     ctx.fillStyle = m.accent;
     ctx.fillRect(pad, pad, 52 * 1.4, 7);
-    ctx.shadowBlur = 0;
 
     ctx.fillStyle = m.text;
     ctx.font = `700 ${Math.round(44)}px ${FONT}`;
@@ -166,8 +165,6 @@ export class OverlayRenderer {
     ctx.save();
     ctx.textAlign = "right";
     ctx.textBaseline = "bottom";
-    ctx.shadowColor = m.shadow;
-    ctx.shadowBlur = 14;
     ctx.fillStyle = m.sub;
     ctx.font = `600 ${Math.round(24)}px ${FONT}`;
     ctx.fillText(
@@ -205,8 +202,8 @@ export class OverlayRenderer {
     ctx.translate(0, -slide);
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.shadowColor = "rgba(2,6,14,0.65)";
-    ctx.shadowBlur = 22;
+    ctx.shadowColor = "rgba(2,6,14,0.55)";
+    ctx.shadowBlur = 8;
     const baseY = H * 0.845;
     if (ev.title) {
       ctx.fillStyle = m.accent;
