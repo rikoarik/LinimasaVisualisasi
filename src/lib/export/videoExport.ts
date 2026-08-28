@@ -8,6 +8,7 @@ import { OverlayRenderer } from "../engine/overlayRenderer";
 export type AspectId = "16:9" | "9:16" | "1:1" | "4:5";
 
 export interface ExportSettings {
+  mode: "fast" | "quality";
   trail?: boolean;
   aspect: AspectId;
   resolution: 720 | 1080;
@@ -115,6 +116,165 @@ function captureOnRender(map: MlMap, capture: () => void): Promise<void> {
 }
 
 export async function exportJourneyVideo(opts: {
+  map: MlMap;
+  engine: JourneyEngine;
+  journey: CompiledJourney;
+  overlayRenderer: OverlayRenderer;
+  styleId: MapStyleId;
+  settings: ExportSettings;
+  onProgress: (p: ExportProgress) => void;
+  cancelled: () => boolean;
+}): Promise<{ blob: Blob; ext: string }> {
+  if (opts.settings.mode === "fast") {
+    return fastExport(opts);
+  }
+  return qualityExport(opts);
+}
+
+const FAST_SPEED = 4;
+
+async function fastExport(opts: {
+  map: MlMap;
+  engine: JourneyEngine;
+  journey: CompiledJourney;
+  overlayRenderer: OverlayRenderer;
+  styleId: MapStyleId;
+  settings: ExportSettings;
+  onProgress: (p: ExportProgress) => void;
+  cancelled: () => boolean;
+}): Promise<{ blob: Blob; ext: string }> {
+  const { map, engine, journey, overlayRenderer, settings } = opts;
+  const { w, h } = outputSize(settings.aspect, settings.resolution);
+
+  const container = map.getContainer();
+  const prevCss = container.style.cssText;
+  const prevRatio = map.getPixelRatio();
+  container.style.position = "fixed";
+  container.style.left = "-10000px";
+  container.style.top = "0";
+  container.style.width = `${w}px`;
+  container.style.height = `${h}px`;
+  engine.pause();
+  try { map.setPixelRatio(1); } catch {}
+  map.resize();
+
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = w;
+  exportCanvas.height = h;
+  const ctx = exportCanvas.getContext("2d", { alpha: false })!;
+
+  const stream = exportCanvas.captureStream(0);
+  const mimeCandidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
+  const mime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+  if (!mime) throw new Error("No supported MediaRecorder codec found");
+
+  const bitrate = Math.round(
+    Math.min(20_000_000, Math.max(6_000_000, w * h * 0.025))
+  );
+  const recorder = new MediaRecorder(stream, {
+    mimeType: mime,
+    videoBitsPerSecond: bitrate,
+  });
+  const chunks: BlobPart[] = [];
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  const recorderDone = new Promise<void>((resolve) => {
+    recorder.onstop = () => resolve();
+  });
+
+  opts.onProgress({ phase: "preparing", frame: 0, totalFrames: 0, pct: 0 });
+
+  engine.seek(0);
+  await new Promise((r) => setTimeout(r, 100));
+  await waitForTiles(map, 3000);
+
+  let frameCount = 0;
+  let rafId = 0;
+  let lastFrameTime = 0;
+  const frameInterval = 1000 / settings.fps;
+  const wallDuration = journey.durationPb;
+
+  const prevRate = engine.rate;
+  engine.rate = FAST_SPEED;
+  engine.play();
+
+  recorder.start(100);
+  const startTime = performance.now();
+
+  await new Promise<void>((resolve) => {
+    const tick = (ts: number) => {
+      if (opts.cancelled()) {
+        engine.pause();
+        engine.rate = prevRate;
+        recorder.stop();
+        resolve();
+        return;
+      }
+
+      const elapsed = performance.now() - startTime;
+      const journeyTime = (elapsed / 1000) * FAST_SPEED;
+
+      if (journeyTime >= wallDuration) {
+        engine.pause();
+        engine.rate = prevRate;
+        captureFrame();
+        recorder.stop();
+        resolve();
+        return;
+      }
+
+      if (ts - lastFrameTime >= frameInterval) {
+        lastFrameTime = ts;
+        captureFrame();
+        frameCount++;
+        const pct = Math.min(92, (elapsed / (wallDuration / FAST_SPEED * 1000)) * 92);
+        opts.onProgress({
+          phase: "rendering",
+          frame: frameCount,
+          totalFrames: Math.round(wallDuration * settings.fps),
+          pct,
+        });
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    function captureFrame() {
+      ctx.drawImage(map.getCanvas(), 0, 0, w, h);
+      if (settings.overlays || settings.letterbox) {
+        overlayRenderer.draw(ctx, w, h, engine.getHud(), journey, map, opts.styleId, {
+          overlays: settings.overlays,
+          letterbox: settings.letterbox,
+          trail: settings.trail ?? true,
+          clear: false,
+        });
+      }
+    }
+
+    rafId = requestAnimationFrame(tick);
+  });
+
+  cancelAnimationFrame(rafId);
+  await recorderDone;
+
+  opts.onProgress({ phase: "encoding", frame: 0, totalFrames: 0, pct: 95 });
+
+  try { map.setPixelRatio(prevRatio); } catch {}
+  container.style.cssText = prevCss;
+  map.resize();
+  engine.seek(0);
+
+  const ext = "webm";
+  const blob = new Blob(chunks, { type: mime });
+  opts.onProgress({ phase: "done", frame: 0, totalFrames: 0, pct: 100 });
+  return { blob, ext };
+}
+
+async function qualityExport(opts: {
   map: MlMap;
   engine: JourneyEngine;
   journey: CompiledJourney;

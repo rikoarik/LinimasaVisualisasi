@@ -50,6 +50,7 @@ export default function Editor() {
   const [currentTitle, setCurrentTitle] = useState<string | null>(null);
   const [currentVehicle, setCurrentVehicle] = useState<VehicleKind | null>(null);
   const [settings, setSettings] = useState<ExportSettings>({
+    mode: "fast",
     aspect: "16:9",
     resolution: 1080,
     fps: 30,

@@ -113,6 +113,18 @@ export default function RightPanel(p: Props) {
       <Section title="Video">
         <div className="space-y-2.5">
           <div>
+            <div className="mb-1 text-[11px] text-slate-500">Export mode</div>
+            <Seg
+              options={[
+                { v: "fast" as const, l: "\u26A1 Fast" },
+                { v: "quality" as const, l: "\uD83C\uDFA8 Quality" },
+              ]}
+              value={p.settings.mode}
+              onChange={(v) => p.onSettings({ ...p.settings, mode: v })}
+            />
+          </div>
+
+          <div>
             <div className="mb-1 text-[11px] text-slate-500">Aspect</div>
             <div className="grid grid-cols-4 gap-1.5">
               {ASPECTS.map((a) => (
@@ -250,8 +262,9 @@ export default function RightPanel(p: Props) {
       </div>
 
       <div className="mt-auto px-4 pb-3 text-[10.5px] leading-relaxed text-slate-600">
-        Export renders every frame offline (WebCodecs) — faster than realtime in
-        Chromium. Falls back to realtime capture elsewhere.
+        {p.settings.mode === "fast"
+          ? "Fast mode records in real-time at 4x speed via MediaRecorder — export a 60s journey in ~15s."
+          : "Quality mode renders every frame offline (WebCodecs) — highest quality but slower."}
       </div>
     </aside>
   );
