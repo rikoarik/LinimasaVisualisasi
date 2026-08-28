@@ -54,7 +54,7 @@ export class OverlayRenderer {
       this.drawEvents(ctx, W, H, u, hud.activeEvents, m);
     }
     if (opts.letterbox) this.drawLetterbox(ctx, W, H);
-    if (opts.overlays) this.drawMarkers(ctx, journey, map, style, W, H, u);
+    if (opts.overlays) this.drawMarkers(ctx, journey, map, style, W, H, u, hud);
   }
 
   private drawVignette(ctx: CanvasRenderingContext2D, W: number, H: number) {
@@ -79,6 +79,10 @@ export class OverlayRenderer {
     const traveled = Math.max(2, Math.min(total, Math.round((hud.progressPct / 100) * total)));
     const step = Math.max(1, Math.floor(total / 420));
 
+    const isIntro = hud.time < hud.introDur;
+    const introProgress = isIntro ? hud.time / hud.introDur : 1;
+    const isFinale = hud.time > hud.duration - hud.finaleDur;
+
     const projectPath = (from: number, to: number) => {
       ctx.beginPath();
       let started = false;
@@ -97,27 +101,37 @@ export class OverlayRenderer {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
 
-    ctx.setLineDash([7, 9]);
-    projectPath(traveled - 1, total - 1);
-    ctx.strokeStyle = style === "light" || style === "minimal" || style === "bright" ? "rgba(15,23,42,0.30)" : "rgba(255,255,255,0.30)";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.setLineDash([]);
+    if (!isIntro) {
+      const fadeAlpha = Math.min(1, (hud.time - hud.introDur) / 2.5);
+      ctx.globalAlpha = fadeAlpha;
+      ctx.setLineDash([7, 9]);
+      projectPath(traveled - 1, total - 1);
+      ctx.strokeStyle = style === "light" || style === "minimal" || style === "bright" ? "rgba(15,23,42,0.30)" : "rgba(255,255,255,0.30)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
 
-    ctx.shadowColor = m.accent;
-    ctx.shadowBlur = 16;
-    projectPath(0, traveled - 1);
-    ctx.strokeStyle = m.accent;
-    ctx.globalAlpha = 0.18;
-    ctx.lineWidth = 16;
-    ctx.stroke();
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 8;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = 3.5;
-    ctx.strokeStyle = style === "light" || style === "minimal" || style === "bright" ? "#0369a1" : "#ffd27a";
-    ctx.stroke();
+    if (traveled > 2) {
+      const trailAlpha = isIntro ? introProgress * 0.4 : isFinale ? 1 : Math.min(1, (hud.time - hud.introDur) / 3);
+      ctx.globalAlpha = Math.max(0.15, trailAlpha);
+      ctx.shadowColor = m.accent;
+      ctx.shadowBlur = 16;
+      projectPath(0, traveled - 1);
+      ctx.strokeStyle = m.accent;
+      ctx.globalAlpha *= 0.18;
+      ctx.lineWidth = 16;
+      ctx.stroke();
+      ctx.globalAlpha = trailAlpha * 0.5;
+      ctx.lineWidth = 8;
+      ctx.stroke();
+      ctx.globalAlpha = Math.max(0.3, trailAlpha);
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = style === "light" || style === "minimal" || style === "bright" ? "#0369a1" : "#ffd27a";
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
     ctx.restore();
   }
 
@@ -136,7 +150,9 @@ export class OverlayRenderer {
     m: ReturnType<typeof moodFor>
   ) {
     const pad = 46;
+    const fadeAlpha = Math.min(1, (hud.time + 0.5) / Math.max(1.5, hud.introDur * 0.5));
     ctx.save();
+    ctx.globalAlpha = fadeAlpha;
     ctx.fillStyle = m.accent;
     ctx.fillRect(pad, pad, 52 * 1.4, 7);
 
@@ -224,9 +240,11 @@ export class OverlayRenderer {
     _style: MapStyleId,
     W: number,
     H: number,
-    _u: number
+    _u: number,
+    hud?: HudSnapshot
   ) {
     if (!map) return;
+    const fadeAlpha = hud ? Math.min(1, (hud.time + 1) / Math.max(2, hud.introDur * 0.6)) : 1;
     const pts: MarkerPx[] = [];
     const s = journey.samples[0];
     const e = journey.samples[journey.samples.length - 1];
@@ -240,6 +258,7 @@ export class OverlayRenderer {
       if (p.x < -60 || p.y < -60 || p.x > W + 60 || p.y > H + 60) continue;
       const r = p.kind === "start" ? 9 : 12;
       ctx.save();
+      ctx.globalAlpha = fadeAlpha;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r + 7, 0, Math.PI * 2);
       ctx.strokeStyle = p.kind === "start" ? "rgba(56,189,248,0.85)" : "rgba(255,181,71,0.95)";

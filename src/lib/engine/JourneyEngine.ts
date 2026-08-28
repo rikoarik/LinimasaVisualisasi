@@ -19,6 +19,8 @@ export interface HudSnapshot {
   activeEvents: (JourneyEvent & { remain?: number })[];
   hasJourney: boolean;
   title: string;
+  introDur: number;
+  finaleDur: number;
 }
 
 export interface FrameInfo {
@@ -43,6 +45,8 @@ const EMPTY_SNAPSHOT: HudSnapshot = {
   activeEvents: [],
   hasJourney: false,
   title: "",
+  introDur: 5,
+  finaleDur: 5,
 };
 
 export class JourneyEngine {
@@ -257,6 +261,8 @@ export class JourneyEngine {
       activeEvents: active,
       hasJourney: true,
       title: j.title,
+      introDur: j.introDur,
+      finaleDur: j.finaleDur,
     };
   }
 

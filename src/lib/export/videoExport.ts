@@ -80,6 +80,15 @@ function nextRender(map: MlMap): Promise<void> {
   });
 }
 
+async function waitForTiles(map: MlMap, timeoutMs = 2000): Promise<void> {
+  if (map.loaded()) return;
+  const start = performance.now();
+  while (performance.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 40));
+    if (map.loaded()) return;
+  }
+}
+
 function captureOnRender(map: MlMap, capture: () => void): Promise<void> {
   return new Promise((resolve) => {
     let done = false;
@@ -143,6 +152,7 @@ export async function exportJourneyVideo(opts: {
       if (opts.cancelled()) throw new Error("cancelled");
     }
     await awaitMapIdle(map, 6000);
+    await waitForTiles(map, 3000);
 
     const canvas = document.createElement("canvas");
     canvas.width = w;
@@ -167,9 +177,13 @@ export async function exportJourneyVideo(opts: {
       });
       encoder.configure({ codec, width: w, height: h, bitrate, framerate: settings.fps });
 
+      const introFrames = Math.ceil(journey.introDur * settings.fps);
+
       for (let fIdx = 0; fIdx < totalFrames; fIdx++) {
         if (opts.cancelled()) throw new Error("cancelled");
-        engine.seek((fIdx / totalFrames) * journey.durationPb);
+        const pb = (fIdx / totalFrames) * journey.durationPb;
+        engine.seek(pb);
+        await waitForTiles(map, 800);
         await captureOnRender(map, () => {
           ctx.drawImage(map.getCanvas(), 0, 0, w, h);
           if (settings.overlays || settings.letterbox) {
